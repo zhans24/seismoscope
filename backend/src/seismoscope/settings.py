@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str
     waveform_storage_path: str = "/data/waveforms"
-    earthscope_base_url: str = "https://service.earthscope.org"
+    usgs_event_base_url: str = "https://earthquake.usgs.gov"
     log_level: str = "INFO"
     worker_poll_seconds: int = 3
 

@@ -7,12 +7,12 @@ import httpx
 from seismoscope.settings import settings
 
 
-class EarthscopeUnavailable(RuntimeError):
+class CatalogueUnavailable(RuntimeError):
     pass
 
 
-class EarthscopeClient:
-    """Small boundary around the upstream catalogue; retries stay server-side."""
+class EventCatalogueClient:
+    """Boundary around the selected global event catalogue."""
 
     async def search_events(
         self,
@@ -22,6 +22,10 @@ class EarthscopeClient:
         min_magnitude: float | None,
         max_magnitude: float | None,
         limit: int,
+        min_latitude: float | None,
+        max_latitude: float | None,
+        min_longitude: float | None,
+        max_longitude: float | None,
     ) -> dict:
         params: dict[str, str | int | float] = {
             "format": "geojson",
@@ -34,17 +38,19 @@ class EarthscopeClient:
             params["minmagnitude"] = min_magnitude
         if max_magnitude is not None:
             params["maxmagnitude"] = max_magnitude
+        if min_latitude is not None:
+            params.update({"minlatitude": min_latitude, "maxlatitude": max_latitude, "minlongitude": min_longitude, "maxlongitude": max_longitude})
 
-        earthscope_url = f"{settings.earthscope_base_url}/fdsnws/event/1/query"
+        url = f"{settings.usgs_event_base_url}/fdsnws/event/1/query"
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(15.0), follow_redirects=True) as client:
-                response = await client.get(earthscope_url, params=params)
+                response = await client.get(url, params=params)
                 response.raise_for_status()
                 payload = response.json()
         except (httpx.HTTPError, ValueError) as error:
-            raise EarthscopeUnavailable(str(error)) from error
+            raise CatalogueUnavailable(str(error)) from error
 
-        return {"source": "EarthScope FDSN", "items": [self._to_event(feature) for feature in payload.get("features", [])]}
+        return {"source": "USGS FDSN Event API", "items": [self._to_event(feature) for feature in payload.get("features", [])]}
 
     @staticmethod
     def _to_event(feature: dict) -> dict:
