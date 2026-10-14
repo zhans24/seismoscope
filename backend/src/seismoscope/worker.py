@@ -10,7 +10,7 @@ from sqlalchemy import select, update
 
 from seismoscope.db.models import AnalysisResult, Event, ProcessingJob, Station, Waveform
 from seismoscope.db.session import SessionLocal
-from seismoscope.services.signals import analyse, download_waveform, save_original
+from seismoscope.services.signals import WaveformNotFound, analyse, download_waveform, save_original
 from seismoscope.settings import settings
 
 logging.basicConfig(level=settings.log_level)
@@ -48,7 +48,7 @@ async def execute(job_id: UUID) -> None:
         event_time = event.occurred_at
         start = event_time - timedelta(seconds=options["seconds_before"])
         end = event_time + timedelta(seconds=options["seconds_after"])
-        completed, failures = [], []
+        completed, failures, station_results = [], [], []
         for station_id in job.payload["station_ids"]:
             station = await session.get(Station, UUID(station_id))
             station_code = f"{station.network_code}.{station.station_code}"
@@ -65,12 +65,19 @@ async def execute(job_id: UUID) -> None:
                 session.add(AnalysisResult(waveform_id=waveform.id, parameters=metadata["parameters"], metrics=metrics, series=series))
                 await session.commit()
                 completed.append(str(waveform.id))
+                station_results.append({"station": station_code, "status": "available"})
+            except WaveformNotFound as error:
+                await session.rollback()
+                logger.info("station %s has no waveform for this window", station_code)
+                station_results.append({"station": station_code, "status": "no_data", "message": str(error)})
+                failures.append(f"{station_code}: {error}")
             except Exception as error:
                 await session.rollback()
                 logger.warning("station %s failed: %s", station_code, error)
+                station_results.append({"station": station_code, "status": "error", "message": str(error)})
                 failures.append(f"{station_code}: {error}")
         job = await session.get(ProcessingJob, job_id)
-        job.payload = {**job.payload, "waveform_ids": completed}
+        job.payload = {**job.payload, "waveform_ids": completed, "station_results": station_results}
         job.status = "succeeded" if completed else "failed"
         job.last_error = "; ".join(failures)[:4000] or None
         job.locked_at = None

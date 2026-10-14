@@ -22,7 +22,7 @@ async def nearby_stations(latitude: float, longitude: float, at: datetime, radiu
         "latitude": latitude, "longitude": longitude,
         "maxradius": min(radius_km / 111.2, 180),
         "starttime": at.isoformat(), "endtime": (at + timedelta(seconds=1)).isoformat(),
-        "channel": "BHZ", "level": "station", "format": "text", "nodata": 404,
+        "channel": "BHZ", "level": "station", "format": "text", "includerestricted": "false", "nodata": 404,
     }
     url = f"{settings.earthscope_base_url}/fdsnws/station/1/query"
     try:

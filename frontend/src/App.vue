@@ -16,6 +16,18 @@ const stationLoading = ref(false)
 const analysisJob = ref(null)
 const analysisError = ref('')
 const jobLabels = { pending: 'в очереди', running: 'обработка', succeeded: 'готово', failed: 'ошибка' }
+const missingWaveforms = computed(() => analysisJob.value?.station_results?.filter((result) => result.status === 'no_data') ?? [])
+const stationErrors = computed(() => analysisJob.value?.station_results?.filter((result) => result.status === 'error') ?? [])
+const jobSummary = computed(() => {
+  if (!analysisJob.value) return ''
+  if (analysisJob.value.status === 'failed' && missingWaveforms.value.length && !stationErrors.value.length) {
+    return 'Записи не найдены'
+  }
+  if (analysisJob.value.status === 'succeeded' && missingWaveforms.value.length) {
+    return 'Готово частично'
+  }
+  return jobLabels[analysisJob.value.status] ?? analysisJob.value.status
+})
 
 function localDateInput(date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
@@ -249,6 +261,7 @@ onMounted(load)
       <p>{{ new Date(activeEvent?.time).toLocaleString('ru-RU', { timeZone: 'UTC' }) }} UTC · M {{ activeEvent?.magnitude }} · глубина {{ activeEvent?.depth_km }} км</p>
       <h2>Ближайшие станции</h2>
       <p>Выберите до пяти станций для одного события. Источник записей: EarthScope FDSN.</p>
+      <p class="station-note">Список показывает станции с подходящим каналом, но наличие записи за выбранные минуты проверяется при загрузке. Для недавних событий архив может пополняться с задержкой.</p>
       <p v-if="stationLoading">Ищем станции…</p>
       <p v-else-if="!stations.length">Станции не найдены в радиусе 1500 км.</p>
       <div class="station-list">
@@ -270,7 +283,12 @@ onMounted(load)
       </div>
       <button class="more" :disabled="!selectedStations.length || ['pending', 'running'].includes(analysisJob?.status)" @click="startAnalysis">Загрузить и сравнить записи</button>
       <p v-if="analysisError" class="error">{{ analysisError }}</p>
-      <p v-if="analysisJob" class="job-status">Задача: {{ jobLabels[analysisJob.status] ?? analysisJob.status }} <span v-if="analysisJob.error">· {{ analysisJob.error }}</span></p>
+      <div v-if="analysisJob" class="job-status" role="status">
+        <b>Задача: {{ jobSummary }}</b>
+        <p v-if="missingWaveforms.length">Нет записи за этот интервал: {{ missingWaveforms.map((result) => result.station).join(', ') }}. Выберите другие станции или повторите запрос позже.</p>
+        <p v-if="stationErrors.length">Ошибка при загрузке: {{ stationErrors.map((result) => `${result.station}: ${result.message}`).join('; ') }}</p>
+        <p v-if="analysisJob.error && !analysisJob.station_results?.length">{{ analysisJob.error }}</p>
+      </div>
       <section v-if="analysisJob?.traces?.length" class="traces">
         <h2>Сравнение сигналов</h2>
         <p>Общая временная шкала: отметка события показана вертикальной линией. Без нормировки амплитудная шкала тоже общая. Оценка прихода приблизительная.</p>

@@ -17,18 +17,26 @@ class WaveformUnavailable(RuntimeError):
     pass
 
 
+class WaveformNotFound(WaveformUnavailable):
+    """The archive has no samples for this channel and time window."""
+
+
 async def download_waveform(network: str, station: str, channel: str, start, end) -> bytes:
     params = {"net": network, "sta": station, "loc": "*", "cha": channel, "start": start.isoformat(), "end": end.isoformat(), "format": "miniseed", "nodata": 404}
     url = f"{settings.earthscope_base_url}/fdsnws/dataselect/1/query"
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(90, connect=15), follow_redirects=True) as client:
             response = await client.get(url, params=params)
+            if response.status_code in (204, 404):
+                raise WaveformNotFound("Нет записи в архиве EarthScope за выбранный интервал")
             response.raise_for_status()
             if len(response.content) > 30_000_000:
                 raise WaveformUnavailable("waveform exceeds 30 MB limit")
             return response.content
-    except httpx.HTTPError as error:
-        raise WaveformUnavailable(str(error)) from error
+    except httpx.HTTPStatusError as error:
+        raise WaveformUnavailable(f"EarthScope вернул HTTP {error.response.status_code}") from error
+    except httpx.RequestError as error:
+        raise WaveformUnavailable("Не удалось соединиться с EarthScope") from error
 
 
 def save_original(data: bytes, event_id: str, station_id: str) -> tuple[str, str]:
