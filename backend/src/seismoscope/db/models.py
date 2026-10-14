@@ -82,3 +82,15 @@ class Waveform(Base):
     checksum_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     source: Mapped[str] = mapped_column(String(40), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AnalysisResult(Base):
+    __tablename__ = "analysis_results"
+    __table_args__ = (UniqueConstraint("waveform_id", name="uq_analysis_waveform"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    waveform_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("waveforms.id", ondelete="CASCADE"), nullable=False)
+    parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    series: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

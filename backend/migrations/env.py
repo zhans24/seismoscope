@@ -10,7 +10,7 @@ from seismoscope.db import models  # noqa: F401 - registers metadata
 from seismoscope.settings import settings
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", ""))
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("+asyncpg", "+psycopg"))
 
 if config.config_file_name:
     fileConfig(config.config_file_name)

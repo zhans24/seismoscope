@@ -19,7 +19,7 @@ async def search_events(
     max_longitude: float | None = Query(default=None, ge=-180, le=180),
     limit: int = Query(default=20, ge=1, le=100),
 ) -> dict:
-    """Search public EarthScope catalogue without exposing the provider to the browser."""
+    """Search the USGS event catalogue through the backend."""
     if start >= end:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="start must be earlier than end")
     if (min_latitude is None) != (max_latitude is None) or (min_longitude is None) != (max_longitude is None):
