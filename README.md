@@ -4,7 +4,7 @@
 
 ## Быстрый запуск
 
-Требования: Docker Desktop (или Docker Engine с Compose v2) и свободные порты `5173` и `8000`.
+Требования: Docker Desktop (или Docker Engine с Compose v2) и два свободных порта для интерфейса и API.
 
 ```bash
 cp infra/.env.example infra/.env
@@ -58,6 +58,8 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml down
 | Переменная | Назначение |
 | --- | --- |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Параметры PostgreSQL |
+| `FRONTEND_PORT` | Внешний порт веб-интерфейса, по умолчанию `5173` |
+| `API_PORT` | Внешний порт API, по умолчанию `8000` |
 | `DATABASE_URL` | Строка подключения API к PostgreSQL |
 | `WAVEFORM_STORAGE_PATH` | Путь хранения MiniSEED внутри контейнера |
 | `USGS_EVENT_BASE_URL` | Базовый URL USGS Event API |
@@ -65,6 +67,17 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml down
 | `LOG_LEVEL` | Уровень журналирования, например `INFO` |
 
 Не добавляйте `infra/.env` в Git: файл уже исключён в `.gitignore`.
+
+### Порты на сервере
+
+Если на сервере уже работают другие проекты, задайте свободные порты в `infra/.env`, например:
+
+```dotenv
+FRONTEND_PORT=5174
+API_PORT=8001
+```
+
+После запуска интерфейс будет доступен на `http://SERVER_IP:5174`, а API и Swagger — на `http://SERVER_IP:8001` и `http://SERVER_IP:8001/docs`. В текущем выводе `docker ps` порты `5173` и `8000` не заняты, поэтому менять их необязательно.
 
 ## Если запись станции не найдена
 
