@@ -18,7 +18,7 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml up --build
 - OpenAPI/Swagger: http://localhost:8000/docs
 - проверка готовности API: http://localhost:8000/api/v1/health/ready
 
-При первом запуске API автоматически применит миграции PostgreSQL. Исходные MiniSEED-записи и результаты обработки сохраняются в Docker-томах.
+При первом запуске API автоматически применит миграции PostgreSQL. Исходные MiniSEED-записи и результаты обработки сохраняются в Docker-томах. Redis используется как временный общий кэш ответов USGS и EarthScope; постоянное хранение для него не требуется.
 
 Для запуска в фоне:
 
@@ -30,7 +30,7 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml up --build --de
 
 ```bash
 docker compose --env-file infra/.env -f infra/docker-compose.yml ps
-docker compose --env-file infra/.env -f infra/docker-compose.yml logs --follow api worker
+docker compose --env-file infra/.env -f infra/docker-compose.yml logs --follow api worker redis
 ```
 
 Остановить сервисы:
@@ -61,12 +61,35 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml down
 | `FRONTEND_PORT` | Внешний порт веб-интерфейса, по умолчанию `5173` |
 | `API_PORT` | Внешний порт API, по умолчанию `8000` |
 | `DATABASE_URL` | Строка подключения API к PostgreSQL |
+| `REDIS_URL` | Строка подключения к Redis, по умолчанию `redis://redis:6379/0` |
 | `WAVEFORM_STORAGE_PATH` | Путь хранения MiniSEED внутри контейнера |
 | `USGS_EVENT_BASE_URL` | Базовый URL USGS Event API |
 | `EARTHSCOPE_BASE_URL` | Базовый URL EarthScope FDSN |
 | `LOG_LEVEL` | Уровень журналирования, например `INFO` |
+| `EVENT_CACHE_TTL_SECONDS` | Кэш актуального каталога USGS, по умолчанию 5 минут |
+| `HISTORICAL_EVENT_CACHE_TTL_SECONDS` | Кэш исторического каталога старше суток, по умолчанию 24 часа |
+| `STATION_CACHE_TTL_SECONDS` | Кэш поиска станций EarthScope, по умолчанию 1 час |
+| `PLATE_CACHE_TTL_SECONDS` | Кэш границ тектонических плит, по умолчанию 24 часа |
+| `STALE_CACHE_TTL_SECONDS` | Срок хранения резервной копии ответа для сбоев источника, по умолчанию 7 суток |
 
 Не добавляйте `infra/.env` в Git: файл уже исключён в `.gitignore`.
+
+## Кэширование Redis
+
+Backend кэширует одинаковые запросы каталога землетрясений, поиска ближайших станций и границ тектонических плит. Ключ учитывает все параметры запроса, поэтому данные разных периодов, стран и фильтров не смешиваются. Одновременные одинаковые запросы защищены короткой блокировкой от массового обращения к внешнему API.
+
+Каждый кэшируемый ответ содержит диагностический заголовок `X-Cache`:
+
+- `MISS` — данные получены у внешнего источника и записаны в Redis;
+- `HIT` — результат отдан из актуального кэша;
+- `STALE` — источник недоступен, отдана ранее сохранённая копия;
+- `BYPASS` — Redis недоступен, запрос выполнен напрямую.
+
+Redis настроен с лимитом памяти 256 МБ и политикой `allkeys-lru`: при заполнении удаляются давно неиспользуемые записи. Отказ Redis не останавливает API, но временно отключает кэш и резервные ответы. Проверить работу можно двумя одинаковыми запросами и сравнением заголовка:
+
+```bash
+curl -sS -D - -o /dev/null "http://localhost:8000/api/v1/layers/plate-boundaries"
+```
 
 ### Порты на сервере
 
