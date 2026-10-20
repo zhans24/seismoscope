@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     earthscope_base_url: str = "https://service.earthscope.org"
     log_level: str = "INFO"
     worker_poll_seconds: int = 3
-    cache_lock_seconds: int = 30
+    cache_lock_seconds: int = 50
     event_cache_ttl_seconds: int = 300
     historical_event_cache_ttl_seconds: int = 86400
     station_cache_ttl_seconds: int = 3600

@@ -53,25 +53,30 @@ class EventCatalogueClient:
         """Fetch the public catalogue, retrying only transient upstream failures."""
         error: Exception | None = None
         headers = {"User-Agent": "SeismoScope/0.1 (seismic catalogue research application)"}
-        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0), follow_redirects=True, headers=headers) as client:
-            for attempt in range(3):
-                try:
-                    response = await client.get(url, params=params)
-                    if response.status_code in self._RETRYABLE_STATUS_CODES:
-                        error = httpx.HTTPStatusError(
-                            f"USGS returned HTTP {response.status_code}", request=response.request, response=response
-                        )
-                    else:
-                        response.raise_for_status()
-                        payload = response.json()
-                        if not isinstance(payload, dict):
-                            raise ValueError("USGS returned an unexpected response")
-                        return payload
-                except (httpx.HTTPError, ValueError) as caught:
-                    error = caught
+        try:
+            async with asyncio.timeout(42):
+                async with httpx.AsyncClient(timeout=httpx.Timeout(28.0, connect=5.0), follow_redirects=True, headers=headers) as client:
+                    for attempt in range(2):
+                        try:
+                            response = await client.get(url, params=params)
+                            if response.status_code == 204:
+                                return {"features": []}
+                            response.raise_for_status()
+                            payload = response.json()
+                            if not isinstance(payload, dict):
+                                raise ValueError("USGS returned an unexpected response")
+                            return payload
+                        except httpx.HTTPStatusError as caught:
+                            if caught.response.status_code not in self._RETRYABLE_STATUS_CODES:
+                                raise CatalogueUnavailable(str(caught)) from caught
+                            error = caught
+                        except (httpx.RequestError, ValueError) as caught:
+                            error = caught
 
-                if attempt < 2:
-                    await asyncio.sleep(0.5 * (attempt + 1))
+                        if attempt == 0:
+                            await asyncio.sleep(0.5)
+        except TimeoutError as caught:
+            raise CatalogueUnavailable("USGS catalogue request timed out") from caught
 
         raise CatalogueUnavailable(str(error or "USGS catalogue request failed")) from error
 

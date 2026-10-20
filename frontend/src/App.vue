@@ -5,6 +5,7 @@ import WorldMap from './components/WorldMap.vue'
 const page = ref('overview')
 const catalogueState = ref('initial')
 const catalogueError = ref('')
+const catalogueSlow = ref(false)
 const events = ref([])
 const selectedCountry = ref(null)
 const activeEvent = ref(null)
@@ -18,12 +19,14 @@ const analysisJob = ref(null)
 const analysisError = ref('')
 const cataloguePage = ref(1)
 const eventsPerPage = 10
+let catalogueRequest = null
 
 function localDateInput(date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 }
 
 const now = new Date()
+now.setMinutes(Math.floor(now.getMinutes() / 5) * 5, 0, 0)
 const filters = ref({
   start: localDateInput(new Date(now.getTime() - 7 * 86400000)),
   end: localDateInput(now),
@@ -72,22 +75,38 @@ function catalogueMessage(detail) {
 }
 
 async function load(bounds = selectedCountry.value?.bounds ?? null) {
+  catalogueRequest?.abort()
+  const controller = new AbortController()
+  catalogueRequest = controller
   catalogueState.value = 'loading'
   catalogueError.value = ''
+  catalogueSlow.value = false
+  events.value = []
   cataloguePage.value = 1
+  const slowTimer = setTimeout(() => { if (catalogueRequest === controller) catalogueSlow.value = true }, 8000)
+  const timeoutTimer = setTimeout(() => controller.abort('timeout'), 50000)
   try {
     const params = new URLSearchParams({ start: new Date(filters.value.start).toISOString(), end: new Date(filters.value.end).toISOString(), min_magnitude: filters.value.magnitude, limit: '40' })
     if (bounds) Object.entries(bounds).forEach(([key, value]) => params.set(key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`), value))
-    const response = await fetch(`/api/v1/events?${params}`)
-    const data = await response.json()
-    if (!response.ok) throw new Error(catalogueMessage(data.detail))
+    const response = await fetch(`/api/v1/events?${params}`, { signal: controller.signal })
+    const data = await response.json().catch(() => null)
+    if (catalogueRequest !== controller) return
+    if (!response.ok) throw new Error(catalogueMessage(data?.detail))
+    if (!Array.isArray(data?.items)) throw new Error('Каталог вернул некорректные данные. Повторите запрос.')
     events.value = data.items
     catalogueState.value = data.items.length ? 'ready' : 'empty'
     lastUpdated.value = new Date()
   } catch (cause) {
+    if (catalogueRequest !== controller) return
     events.value = []
-    catalogueError.value = catalogueMessage(cause.message)
+    catalogueError.value = controller.signal.reason === 'timeout'
+      ? 'USGS не ответил за 50 секунд. Повторите запрос позже.'
+      : catalogueMessage(cause.message)
     catalogueState.value = 'error'
+  } finally {
+    clearTimeout(slowTimer)
+    clearTimeout(timeoutTimer)
+    if (catalogueRequest === controller) catalogueRequest = null
   }
 }
 
@@ -210,11 +229,11 @@ onMounted(() => load(null))
         </div>
         <div class="map-frame" :class="{ 'is-loading': catalogueState === 'initial' || catalogueState === 'loading' }">
           <WorldMap :events="events" :active-country-id="selectedCountry?.id" :active-event-id="activeEvent?.id" @select-country="chooseCountry" @select-event="inspectEvent" />
-          <div v-if="catalogueState === 'initial' || catalogueState === 'loading'" class="map-loading" role="status"><span></span>Получаем события из USGS…</div>
+          <div v-if="catalogueState === 'initial' || catalogueState === 'loading'" class="map-loading" role="status"><span></span><span>{{ catalogueSlow ? 'USGS отвечает медленно. Ожидаем данные…' : 'Получаем события из USGS…' }}</span></div>
           <div v-else-if="catalogueState === 'error'" class="map-message map-error" role="alert"><strong>Не удалось обновить карту</strong><span>{{ catalogueError }}</span><button class="secondary-action" @click="load()">Повторить запрос</button></div>
           <div v-else-if="catalogueState === 'empty'" class="map-message"><strong>Событий не найдено</strong><span>Попробуйте увеличить период или снизить минимальную магнитуду.</span></div>
         </div>
-        <div class="map-caption"><span>Размер точки соответствует магнитуде.</span><span>Выберите страну для сводки или эпицентр для анализа.</span></div>
+        <div class="map-caption"><span>Размер точки соответствует магнитуде.</span><span>Выберите страну для сводки или эпицентр для анализа. <span class="mobile-map-hint">Карту можно прокручивать по горизонтали.</span></span></div>
       </section>
 
       <section class="catalogue" aria-labelledby="catalogue-title">
