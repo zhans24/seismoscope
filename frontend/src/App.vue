@@ -16,6 +16,8 @@ const selectedStations = ref([])
 const stationLoading = ref(false)
 const analysisJob = ref(null)
 const analysisError = ref('')
+const cataloguePage = ref(1)
+const eventsPerPage = 10
 
 function localDateInput(date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
@@ -31,6 +33,17 @@ const analysisOptions = ref({ channel: 'BHZ', seconds_before: 60, seconds_after:
 const jobLabels = { pending: 'в очереди', running: 'обработка', succeeded: 'готово', failed: 'ошибка' }
 const largest = computed(() => events.value.reduce((max, event) => Math.max(max, event.magnitude ?? 0), 0))
 const eventCountLabel = computed(() => catalogueState.value === 'loading' || catalogueState.value === 'initial' ? 'Загрузка данных' : `${events.value.length} ${events.value.length === 1 ? 'событие' : events.value.length < 5 ? 'события' : 'событий'}`)
+const cataloguePageCount = computed(() => Math.ceil(events.value.length / eventsPerPage))
+const visibleEvents = computed(() => {
+  const start = (cataloguePage.value - 1) * eventsPerPage
+  return events.value.slice(start, start + eventsPerPage)
+})
+const catalogueRange = computed(() => {
+  if (!events.value.length) return ''
+  const start = (cataloguePage.value - 1) * eventsPerPage + 1
+  const end = Math.min(cataloguePage.value * eventsPerPage, events.value.length)
+  return `${start}–${end} из ${events.value.length}`
+})
 const plotPeak = computed(() => Math.max(...(analysisJob.value?.traces ?? []).map((trace) => trace.metrics.peak_amplitude_counts), 1e-9))
 const plotOptions = computed(() => analysisJob.value?.options ?? analysisOptions.value)
 const missingWaveforms = computed(() => analysisJob.value?.station_results?.filter((result) => result.status === 'no_data') ?? [])
@@ -61,6 +74,7 @@ function catalogueMessage(detail) {
 async function load(bounds = selectedCountry.value?.bounds ?? null) {
   catalogueState.value = 'loading'
   catalogueError.value = ''
+  cataloguePage.value = 1
   try {
     const params = new URLSearchParams({ start: new Date(filters.value.start).toISOString(), end: new Date(filters.value.end).toISOString(), min_magnitude: filters.value.magnitude, limit: '40' })
     if (bounds) Object.entries(bounds).forEach(([key, value]) => params.set(key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`), value))
@@ -75,6 +89,10 @@ async function load(bounds = selectedCountry.value?.bounds ?? null) {
     catalogueError.value = catalogueMessage(cause.message)
     catalogueState.value = 'error'
   }
+}
+
+function setCataloguePage(nextPage) {
+  cataloguePage.value = Math.min(Math.max(nextPage, 1), cataloguePageCount.value)
 }
 
 async function chooseCountry(country) {
@@ -206,8 +224,16 @@ onMounted(() => load(null))
         <div v-else-if="catalogueState === 'empty'" class="catalogue-state"><strong>Нет событий по заданным условиям</strong><p>Измените даты или минимальную магнитуду и обновите данные.</p></div>
         <div v-else class="event-list" role="list">
           <div class="event-list-head" aria-hidden="true"><span>Время (UTC)</span><span>Магнитуда</span><span>Эпицентр</span><span>Глубина</span><span></span></div>
-          <button v-for="event in events" :key="event.id" class="event-row" :class="{ selected: activeEvent?.id === event.id }" role="listitem" :aria-label="`Открыть анализ: ${event.place}`" @click="inspectEvent(event)"><time :datetime="event.time">{{ formatEventTime(event.time) }}</time><b>M {{ event.magnitude?.toFixed(1) ?? '—' }}</b><span>{{ event.place || 'Место не указано' }}</span><i>{{ formatDepth(event.depth_km) }}</i><em aria-hidden="true">→</em></button>
+          <button v-for="event in visibleEvents" :key="event.id" class="event-row" :class="{ selected: activeEvent?.id === event.id }" role="listitem" :aria-label="`Открыть анализ: ${event.place}`" @click="inspectEvent(event)"><time :datetime="event.time">{{ formatEventTime(event.time) }}</time><b>M {{ event.magnitude?.toFixed(1) ?? '—' }}</b><span>{{ event.place || 'Место не указано' }}</span><i>{{ formatDepth(event.depth_km) }}</i><em aria-hidden="true">→</em></button>
         </div>
+        <nav v-if="cataloguePageCount > 1" class="pagination" aria-label="Страницы каталога">
+          <span class="pagination-range">Показаны {{ catalogueRange }}</span>
+          <div class="pagination-controls">
+            <button type="button" :disabled="cataloguePage === 1" aria-label="Предыдущая страница" @click="setCataloguePage(cataloguePage - 1)">←</button>
+            <button v-for="pageNumber in cataloguePageCount" :key="pageNumber" type="button" :class="{ active: cataloguePage === pageNumber }" :aria-label="`Страница ${pageNumber}`" :aria-current="cataloguePage === pageNumber ? 'page' : undefined" @click="setCataloguePage(pageNumber)">{{ pageNumber }}</button>
+            <button type="button" :disabled="cataloguePage === cataloguePageCount" aria-label="Следующая страница" @click="setCataloguePage(cataloguePage + 1)">→</button>
+          </div>
+        </nav>
       </section>
     </section>
 

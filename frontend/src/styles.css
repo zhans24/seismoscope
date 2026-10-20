@@ -73,6 +73,13 @@ button:disabled { cursor: not-allowed; opacity: .56; }
 .catalogue-state strong { color: #193e3b; font-size: 17px; }
 .catalogue-state p { margin: 7px 0 15px; font-size: 14px; }
 .error-state { color: #833925; }
+.pagination { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding-top: 18px; }
+.pagination-range { color: #607a74; font: 11px 'IBM Plex Mono', monospace; }
+.pagination-controls { display: flex; gap: 4px; }
+.pagination-controls button { min-width: 38px; min-height: 38px; border: 1px solid transparent; background: transparent; color: #315f59; font: 500 12px 'IBM Plex Mono', monospace; cursor: pointer; }
+.pagination-controls button:hover:not(:disabled) { border-color: #8eaaa3; background: #e5ede7; }
+.pagination-controls button.active { border-color: #1d5550; background: #1d5550; color: #fffdf7; }
+.pagination-controls button:disabled { color: #879c97; }
 
 .detail-page { padding: 52px 0 80px; }
 .back { min-height: 40px; margin-bottom: 42px; border: 0; border-bottom: 1px solid #6f9189; background: transparent; padding: 0; color: #235c56; font-weight: 600; cursor: pointer; }
@@ -139,6 +146,7 @@ button:disabled { cursor: not-allowed; opacity: .56; }
   .map-heading, .section-heading { align-items: start; }
   .map-caption { display: grid; gap: 4px; }
   .catalogue { margin-top: 52px; }
+  .pagination { align-items: flex-start; }
   .event-list-head { display: none; }
   .event-row { grid-template-columns: 105px 65px minmax(0, 1fr) 18px; gap: 9px; }
   .event-row i { display: none; }
@@ -154,6 +162,9 @@ button:disabled { cursor: not-allowed; opacity: .56; }
   .map-frame { min-height: 260px; }
   .event-row { grid-template-columns: 85px 54px minmax(0, 1fr) 14px; padding-inline: 4px; }
   .event-row time { font-size: 10px; }
+  .pagination { display: grid; gap: 10px; }
+  .pagination-controls { width: 100%; overflow-x: auto; padding-bottom: 3px; }
+  .pagination-controls button { flex: 0 0 42px; min-height: 42px; }
   .trace-head { display: grid; gap: 5px; }
   .analysis-controls { display: grid; grid-template-columns: 1fr 1fr; }
   .analysis-controls input { width: 100%; }
