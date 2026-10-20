@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 import httpx
@@ -13,6 +14,8 @@ class CatalogueUnavailable(RuntimeError):
 
 class EventCatalogueClient:
     """Boundary around the selected global event catalogue."""
+
+    _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
     async def search_events(
         self,
@@ -42,15 +45,35 @@ class EventCatalogueClient:
             params.update({"minlatitude": min_latitude, "maxlatitude": max_latitude, "minlongitude": min_longitude, "maxlongitude": max_longitude})
 
         url = f"{settings.usgs_event_base_url}/fdsnws/event/1/query"
-        try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0), follow_redirects=True) as client:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-                payload = response.json()
-        except (httpx.HTTPError, ValueError) as error:
-            raise CatalogueUnavailable(str(error)) from error
+        payload = await self._request_payload(url, params)
 
         return {"source": "USGS FDSN Event API", "items": [self._to_event(feature) for feature in payload.get("features", [])]}
+
+    async def _request_payload(self, url: str, params: dict[str, str | int | float]) -> dict:
+        """Fetch the public catalogue, retrying only transient upstream failures."""
+        error: Exception | None = None
+        headers = {"User-Agent": "SeismoScope/0.1 (seismic catalogue research application)"}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0), follow_redirects=True, headers=headers) as client:
+            for attempt in range(3):
+                try:
+                    response = await client.get(url, params=params)
+                    if response.status_code in self._RETRYABLE_STATUS_CODES:
+                        error = httpx.HTTPStatusError(
+                            f"USGS returned HTTP {response.status_code}", request=response.request, response=response
+                        )
+                    else:
+                        response.raise_for_status()
+                        payload = response.json()
+                        if not isinstance(payload, dict):
+                            raise ValueError("USGS returned an unexpected response")
+                        return payload
+                except (httpx.HTTPError, ValueError) as caught:
+                    error = caught
+
+                if attempt < 2:
+                    await asyncio.sleep(0.5 * (attempt + 1))
+
+        raise CatalogueUnavailable(str(error or "USGS catalogue request failed")) from error
 
     @staticmethod
     def _to_event(feature: dict) -> dict:

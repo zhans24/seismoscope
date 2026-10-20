@@ -79,6 +79,26 @@ API_PORT=8001
 
 После запуска интерфейс будет доступен на `http://SERVER_IP:5174`, а API и Swagger — на `http://SERVER_IP:8001` и `http://SERVER_IP:8001/docs`. В текущем выводе `docker ps` порты `5173` и `8000` не заняты, поэтому менять их необязательно.
 
+## Автоматический деплой через GitHub Actions
+
+Workflow `.github/workflows/deploy.yml` запускается после push в `main` или `master` и не использует пароль сервера. Перед первым запуском подготовьте отдельный SSH-ключ на своём компьютере:
+
+```bash
+ssh-keygen -t ed25519 -f ~/.ssh/seismoscope_github_actions -C "github-actions-seismoscope"
+```
+
+Добавьте содержимое `~/.ssh/seismoscope_github_actions.pub` в `/home/ubuntu/.ssh/authorized_keys` на сервере. Затем в репозитории GitHub откройте **Settings → Secrets and variables → Actions** и создайте:
+
+| Тип | Имя | Значение |
+| --- | --- | --- |
+| Secret | `DEPLOY_SSH_KEY` | содержимое закрытого ключа `~/.ssh/seismoscope_github_actions` |
+| Secret | `DEPLOY_KNOWN_HOSTS` | вывод `ssh-keyscan -H 91.201.214.206` |
+| Variable | `DEPLOY_HOST` | `91.201.214.206` |
+| Variable | `DEPLOY_USER` | `ubuntu` |
+| Variable | `DEPLOY_PATH` | `/var/www/seismoscope` |
+
+На сервере файл `infra/.env` должен быть создан до первого деплоя и не должен попадать в Git. Workflow синхронизирует исходный код, сохраняет этот файл и перезапускает Compose. Закрытый ключ и пароли не добавляйте ни в репозиторий, ни в комментарии к задачам.
+
 ## Если запись станции не найдена
 
 Станция в списке означает, что у неё есть подходящий канал в метаданных EarthScope. Это не гарантирует наличие записи за конкретные минуты: данные могут поступить с задержкой, быть закрытыми или отсутствовать в архиве. В таком случае интерфейс покажет «Нет записи за этот интервал» для конкретной станции; выберите другую станцию или повторите запрос позже.
