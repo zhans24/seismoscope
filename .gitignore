@@ -1,5 +1,7 @@
 .env
 infra/.env
+.deploy-revision
+.deploy-revision.tmp
 .idea/
 .codex/
 .agents/

@@ -79,9 +79,11 @@ API_PORT=8001
 
 После запуска интерфейс будет доступен на `http://SERVER_IP:5174`, а API и Swagger — на `http://SERVER_IP:8001` и `http://SERVER_IP:8001/docs`. В текущем выводе `docker ps` порты `5173` и `8000` не заняты, поэтому менять их необязательно.
 
-## Автоматический деплой через GitHub Actions
+## Деплой через GitHub Actions
 
-Workflow `.github/workflows/deploy.yml` запускается после push в `main` или `master` и не использует пароль сервера. Перед первым запуском подготовьте отдельный SSH-ключ на своём компьютере:
+После push автоматически выполняются только проверки изменённых частей проекта. Деплой запускается вручную через **Actions → Deploy SeismoScope → Run workflow**. Он использует SSH-ключ, а не пароль сервера. Для дополнительного подтверждения деплоя создайте в **Settings → Environments** окружение `production`, добавьте себя в **Required reviewers** и оставьте **Prevent self-review** выключенным. Доступность этой настройки зависит от типа репозитория и тарифа GitHub.
+
+Для деплоя можно использовать отдельный SSH-ключ, публичная часть которого добавлена в `/home/ubuntu/.ssh/authorized_keys`. Если такого ключа нет, создайте его на своём компьютере:
 
 ```bash
 ssh-keygen -t ed25519 -f ~/.ssh/seismoscope_github_actions -C "github-actions-seismoscope"
@@ -97,7 +99,7 @@ ssh-keygen -t ed25519 -f ~/.ssh/seismoscope_github_actions -C "github-actions-se
 | Variable | `DEPLOY_USER` | `ubuntu` |
 | Variable | `DEPLOY_PATH` | `/var/www/seismoscope` |
 
-На сервере файл `infra/.env` должен быть создан до первого деплоя и не должен попадать в Git. Workflow синхронизирует исходный код, сохраняет этот файл и перезапускает Compose. Закрытый ключ и пароли не добавляйте ни в репозиторий, ни в комментарии к задачам.
+На сервере файл `infra/.env` должен быть создан до первого деплоя и не должен попадать в Git. Workflow обновляет существующий Git-клон до выбранного коммита без merge-коммита, сохраняет `infra/.env` и записывает последний успешно развёрнутый коммит в `.deploy-revision`. При следующем деплое он пересобирает только изменённые сервисы. Если изменилась инфраструктура или это первый деплой, пересобираются все сервисы. Docker кеширует зависимости по `pyproject.toml` и `package-lock.json`: правка исходников не скачивает Python- или npm-пакеты заново. Закрытый ключ и пароли не добавляйте ни в репозиторий, ни в комментарии к задачам.
 
 ## Если запись станции не найдена
 
@@ -105,10 +107,10 @@ ssh-keygen -t ed25519 -f ~/.ssh/seismoscope_github_actions -C "github-actions-se
 
 ## Проверки
 
-Сборка фронтенда:
+Проверка сборки фронтенда:
 
 ```bash
-docker compose --env-file infra/.env -f infra/docker-compose.yml exec frontend npm run build
+docker compose --env-file infra/.env -f infra/docker-compose.yml build frontend
 ```
 
 Тесты обработки ответов EarthScope:
