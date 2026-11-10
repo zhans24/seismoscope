@@ -13,10 +13,10 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml up --build
 
 После запуска откройте:
 
-- интерфейс: http://localhost:5173
-- API: http://localhost:8000
-- OpenAPI/Swagger: http://localhost:8000/docs
-- проверка готовности API: http://localhost:8000/api/v1/health/ready
+- интерфейс: http://localhost:15173
+- API: http://localhost:18000
+- OpenAPI/Swagger: http://localhost:18000/docs
+- проверка готовности API: http://localhost:18000/api/v1/health/ready
 
 При первом запуске API автоматически применит миграции PostgreSQL. Исходные MiniSEED-записи и результаты обработки сохраняются в Docker-томах. Redis используется как временный общий кэш ответов USGS и EarthScope; постоянное хранение для него не требуется.
 
@@ -58,8 +58,9 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml down
 | Переменная | Назначение |
 | --- | --- |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Параметры PostgreSQL |
-| `FRONTEND_PORT` | Внешний порт веб-интерфейса, по умолчанию `5173` |
-| `API_PORT` | Внешний порт API, по умолчанию `8000` |
+| `FRONTEND_PORT` | Внешний порт веб-интерфейса, по умолчанию `15173` |
+| `API_PORT` | Внешний порт API, по умолчанию `18000` |
+| `GRAFANA_PORT`, `PROMETHEUS_PORT` | Локальные порты мониторинга на сервере, по умолчанию `13000` и `19090` |
 | `DATABASE_URL` | Строка подключения API к PostgreSQL |
 | `REDIS_URL` | Строка подключения к Redis, по умолчанию `redis://redis:6379/0` |
 | `WAVEFORM_STORAGE_PATH` | Путь хранения MiniSEED внутри контейнера |
@@ -88,19 +89,21 @@ Backend кэширует одинаковые запросы каталога з
 Redis настроен с лимитом памяти 256 МБ и политикой `allkeys-lru`: при заполнении удаляются давно неиспользуемые записи. Отказ Redis не останавливает API, но временно отключает кэш и резервные ответы. Проверить работу можно двумя одинаковыми запросами и сравнением заголовка:
 
 ```bash
-curl -sS -D - -o /dev/null "http://localhost:8000/api/v1/layers/plate-boundaries"
+curl -sS -D - -o /dev/null "http://localhost:18000/api/v1/layers/plate-boundaries"
 ```
 
 ### Порты на сервере
 
-Если на сервере уже работают другие проекты, задайте свободные порты в `infra/.env`, например:
+Для этого проекта выбраны внешние порты, не занятые в предоставленном выводе `docker ps`:
 
 ```dotenv
-FRONTEND_PORT=5174
-API_PORT=8001
+FRONTEND_PORT=15173
+API_PORT=18000
+GRAFANA_PORT=13000
+PROMETHEUS_PORT=19090
 ```
 
-После запуска интерфейс будет доступен на `http://SERVER_IP:5174`, а API и Swagger — на `http://SERVER_IP:8001` и `http://SERVER_IP:8001/docs`. В текущем выводе `docker ps` порты `5173` и `8000` не заняты, поэтому менять их необязательно.
+После запуска интерфейс будет доступен на `http://SERVER_IP:15173`, а API и Swagger — на `http://SERVER_IP:18000` и `http://SERVER_IP:18000/docs`. На сервере уже существует `infra/.env`: обновите в нём эти четыре значения, иначе старые настройки перекроют новые значения Compose. Перед запуском проверьте также порты хоста командой `ss -ltn`, так как `docker ps` не показывает процессы вне Docker.
 
 ## Мониторинг сервера
 
@@ -113,13 +116,13 @@ docker compose --env-file infra/.env -f infra/docker-compose.yml -f infra/monito
 docker compose --env-file infra/.env -f infra/docker-compose.yml -f infra/monitoring/compose.yml ps
 ```
 
-На своём компьютере откройте SSH-туннель и перейдите по адресу `http://localhost:3000`:
+На своём компьютере откройте SSH-туннель и перейдите по адресу `http://localhost:13000`:
 
 ```bash
-ssh -L 3000:127.0.0.1:3000 ubuntu@91.201.214.206
+ssh -L 13000:127.0.0.1:13000 ubuntu@91.201.214.206
 ```
 
-Вход в Grafana: `admin` и значение `GRAFANA_ADMIN_PASSWORD`. Дашборд находится в папке **SeismoScope**. Для проверки целей Prometheus можно дополнительно открыть туннель `ssh -L 9090:127.0.0.1:9090 ubuntu@91.201.214.206` и страницу `http://localhost:9090/targets`.
+Вход в Grafana: `admin` и значение `GRAFANA_ADMIN_PASSWORD`. Дашборд находится в папке **SeismoScope**. Для проверки целей Prometheus можно дополнительно открыть туннель `ssh -L 19090:127.0.0.1:19090 ubuntu@91.201.214.206` и страницу `http://localhost:19090/targets`.
 
 Если `GRAFANA_ADMIN_PASSWORD` задан в `infra/.env`, следующие штатные деплои через GitHub Actions включают мониторинг и применяют изменения в `infra/monitoring` автоматически.
 

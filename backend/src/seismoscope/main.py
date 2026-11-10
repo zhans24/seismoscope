@@ -21,7 +21,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="SeismoScope API", version="0.1.0", openapi_url="/api/v1/openapi.json", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:15173"],
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
