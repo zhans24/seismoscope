@@ -102,6 +102,27 @@ API_PORT=8001
 
 После запуска интерфейс будет доступен на `http://SERVER_IP:5174`, а API и Swagger — на `http://SERVER_IP:8001` и `http://SERVER_IP:8001/docs`. В текущем выводе `docker ps` порты `5173` и `8000` не заняты, поэтому менять их необязательно.
 
+## Мониторинг сервера
+
+Дополнительный Compose-файл запускает Prometheus, Grafana, Node Exporter и Blackbox Exporter. Дашборд показывает доступность API и интерфейса, загрузку CPU и памяти, место на корневом диске и время HTTP-проверок. Данные Prometheus и настройки Grafana сохраняются в Docker-томах. Порты Grafana и Prometheus слушают только `127.0.0.1` сервера.
+
+На сервере задайте в `infra/.env` уникальный пароль `GRAFANA_ADMIN_PASSWORD` (можно сгенерировать через `openssl rand -base64 32`). Затем из корня репозитория запустите:
+
+```bash
+docker compose --env-file infra/.env -f infra/docker-compose.yml -f infra/monitoring/compose.yml up -d
+docker compose --env-file infra/.env -f infra/docker-compose.yml -f infra/monitoring/compose.yml ps
+```
+
+На своём компьютере откройте SSH-туннель и перейдите по адресу `http://localhost:3000`:
+
+```bash
+ssh -L 3000:127.0.0.1:3000 ubuntu@91.201.214.206
+```
+
+Вход в Grafana: `admin` и значение `GRAFANA_ADMIN_PASSWORD`. Дашборд находится в папке **SeismoScope**. Для проверки целей Prometheus можно дополнительно открыть туннель `ssh -L 9090:127.0.0.1:9090 ubuntu@91.201.214.206` и страницу `http://localhost:9090/targets`.
+
+Если `GRAFANA_ADMIN_PASSWORD` задан в `infra/.env`, следующие штатные деплои через GitHub Actions включают мониторинг и применяют изменения в `infra/monitoring` автоматически.
+
 ## Деплой через GitHub Actions
 
 После push автоматически выполняются только проверки изменённых частей проекта. Деплой запускается вручную через **Actions → Deploy SeismoScope → Run workflow**. Он использует SSH-ключ, а не пароль сервера. Для дополнительного подтверждения деплоя создайте в **Settings → Environments** окружение `production`, добавьте себя в **Required reviewers** и оставьте **Prevent self-review** выключенным. Доступность этой настройки зависит от типа репозитория и тарифа GitHub.

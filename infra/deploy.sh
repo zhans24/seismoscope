@@ -30,6 +30,9 @@ done <<< "$changed"
 
 echo "Changes: backend=$backend_changed frontend=$frontend_changed infra=$infrastructure_changed"
 compose=(docker compose --env-file infra/.env -f infra/docker-compose.yml)
+if grep -Eq '^GRAFANA_ADMIN_PASSWORD=.+$' infra/.env; then
+    compose+=(-f infra/monitoring/compose.yml)
+fi
 
 if [[ "$infrastructure_changed" == 1 ]]; then
     "${compose[@]}" up --build --detach --remove-orphans
